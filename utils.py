@@ -4,6 +4,13 @@ import configparser
 import csv
 import psycopg2
 
+from datetime import datetime
+from colorama import init, Fore, Style
+
+# Inizializza colorama (necessario su Windows)
+init(autoreset=True)
+
+
 def download_file(url=None):
     # Leggi il file di configurazione
     config = configparser.ConfigParser()
@@ -33,16 +40,16 @@ def download_file(url=None):
         with open(file_path, 'wb') as file:
             file.write(response.content)
 
-        print(f"***********************************************\n")
-        print(f"- File scaricato con successo da....: {url}\n")
-        print(f"- Salvataggio effettuato in.........: {file_path}\n")
-        print(f"***********************************************\n")
-
+        display_message("INFO",f"File scaricato con successo da....: {url}")
+        display_message("INFO",f"Nome file scaricato...............: {filename}")
+        display_message("INFO",f"Salvataggio effettuato in.........: {file_path}")
     except requests.RequestException as e:
-        print(f"Errore durante il download del file: {e}")
+        display_message("ERROR",f"Errore durante il download del file: {e}")
     except IOError as e:
-        print(f"Errore durante il salvataggio del file: {e}")
-
+        display_message("ERROR",f"Errore durante il salvataggio del file: {e}")
+    except Exception as e:
+        display_message("ERROR",f"Errore imprevisto: {e}")
+        
 def load_csv_to_postgresql():
     config = configparser.ConfigParser()
     # Assicurati che il file config.ini esista nella stessa directory dello script
@@ -73,7 +80,7 @@ def load_csv_to_postgresql():
         cur.execute(f"TRUNCATE TABLE {table_name}")
 
         # Apri e leggi il file CSV
-        with open(csv_path, 'r') as csvfile:
+        with open(csv_path, 'r', encoding='utf-8') as csvfile:
             csvreader = csv.reader(csvfile)
             headers = next(csvreader)  # Leggi l'intestazione
 
@@ -86,14 +93,45 @@ def load_csv_to_postgresql():
 
         # Commit delle modifiche
         conn.commit()
-        print(f"Dati caricati con successo nella tabella {table_name}")
-
+        display_message("INFO",f"Caricamento dati completato nella tabella: {table_name}")
+        
     except (Exception, psycopg2.Error) as error:
-        print(f"Errore durante l'esecuzione dello script: {error}")
+        # Gestione degli errori
+        display_message("ERROR",f"Errore durante il caricamento del file CSV: {error}")
+        display_message("ERROR",f"Ultima riga elaborata: {row}")
 
     finally:
         # Chiudi la connessione al database
         if conn:
             cur.close()
             conn.close()
-            print("Connessione al database chiusa.")
+            display_message("INFO","Connessione al database chiusa.")
+
+def write_log(message):
+    # Scrivi un messaggio di log su un file
+    with open('log.txt', 'a') as log_file:
+        log_file.write(f"{message}\n")
+
+def display_message(level: str, message: str) -> None:
+    """
+    Mostra un messaggio formattato con timestamp, livello e colore.
+
+    Args:
+        level (str): Il livello del messaggio (es. 'INFO', 'WARN', 'ERROR').
+        message (str): Il contenuto del messaggio.
+    """
+    timestamp = datetime.now().strftime("%Y-%d-%m %H:%M:%S")
+    level = level.upper()
+
+    # Associa il colore in base al livello
+    if level == "INFO":
+        color = Fore.GREEN
+    elif level == "WARN":
+        color = Fore.YELLOW
+    elif level == "ERROR":
+        color = Fore.RED
+    else:
+        color = Fore.WHITE  # Default per livelli sconosciuti
+
+    formatted_message = f"{color}[{timestamp}] - {level} - {message}{Style.RESET_ALL}"
+    print(formatted_message)
